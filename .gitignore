@@ -1,2 +1,23 @@
 /myenv/
-/results_20260219_002020/
+/__pycache__/
+*.pyc
+
+# Secrets
+vk_token.txt
+
+# Generated output / logs
+*.log
+*.pkl
+*.zip
+
+# Output data (generated)
+predictions.csv
+TEST.csv
+/results_*/
+/Исходные файлы/
+/Астрахань/
+/ПФО_*/
+/*.xlsx
+
+# Model (distributed separately)
+/rubert_bert_RU_35data_6_epochs/

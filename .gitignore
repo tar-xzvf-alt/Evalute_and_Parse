@@ -2,6 +2,9 @@
 /__pycache__/
 *.pyc
 
+# IDE
+/.vscode/
+
 # Secrets
 vk_token.txt
 
@@ -19,5 +22,20 @@ TEST.csv
 /ПФО_*/
 /*.xlsx
 
+# Analysis script outputs
+/data/sdg_category_analysis/
+/data/sdg_sentiment_analysis/
+/data/results_filtered/
+
 # Model (distributed separately)
 /rubert_bert_RU_35data_6_epochs/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.toc
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk

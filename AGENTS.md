@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## What this is
-Russian VK social media parser + dictionary-based sentiment analysis (Kartaslovsent, RuSentiLex) + ruBERT-based SDG classification (17 UN goals). GUI app (`TryToParse_new.py`) wraps all functionality.
+Russian VK social media parser + dictionary-based sentiment analysis (Kartaslovsent, RuSentiLex) + ruBERT-based SDG classification (17 UN goals). GUI app (`src/TryToParse_new.py`) wraps all functionality.
 
 ## Setup
 ```bash
@@ -15,14 +15,16 @@ No build system, no linter, no typechecker, no tests. Just direct `python script
 
 | Script | Purpose | Args |
 |---|---|---|
-| `TryToParse_new.py` | GUI app (CustomTkinter) — 4 tabs: parsing, token mgmt, single-file analysis, multi-folder analysis | none |
-| `evaluate_script.py` | Batch SDG classification via ruBERT on Excel files | `--input_folder <path>` (required), `--threshold 0.9`, `--batch_size 24`, `--model_path rubert_bert_RU_35data_6_epochs/`, etc. |
-| `batch_setniment_analyzer.py` | Batch dictionary sentiment analysis on folder hierarchies | none (hardcoded paths inside) |
-| `slovari_parse_itogi.py` | Aggregate per-file sentiment stats into master Excel | none |
-| `analyse.py` | ML sentiment (TF-IDF + Random Forest/KNN) | needs `combcombcomb.xlsx` and `comb_test_1.xlsx` — **not in repo** |
-| `sdg_prepare_script.py` | Split SDG-classified Excel into per-class files | none |
-| `razmet_script.py` | Confusion matrix charts for dictionary comparison | none |
-| `diag.py` | Regional data charts from multi-sheet Excel | none |
+| `src/TryToParse_new.py` | GUI app (CustomTkinter) — 4 tabs: parsing, token mgmt, single-file analysis, multi-folder analysis | none |
+| `src/evaluate_script.py` | Batch SDG classification via ruBERT on Excel files | `--input_folder <path>` (required), `--threshold 0.9`, `--batch_size 24`, `--model_path rubert_bert_RU_35data_6_epochs/`, etc. |
+| `src/batch_setniment_analyzer.py` | Batch dictionary sentiment analysis on folder hierarchies | none (hardcoded paths inside) |
+| `src/slovari_parse_itogi.py` | Aggregate per-file sentiment stats into master Excel | none |
+| `src/analyse.py` | ML sentiment (TF-IDF + Random Forest/KNN) | needs `combcombcomb.xlsx` and `comb_test_1.xlsx` — **not in repo** |
+| `src/sdg_prepare_script.py` | Split SDG-classified Excel into per-class files | none |
+| `src/razmet_script.py` | Confusion matrix charts for dictionary comparison | none |
+| `src/diag.py` | Regional data charts from multi-sheet Excel | none |
+| `src/sdg_economic_analysis.py` | Group SDG-classified texts into social/economic/environmental categories, plot distribution | reads from `data/results_filtered/` |
+| `src/sdg_sentiment_cross.py` | Compute sentiment per SDG category per region/year, compare dictionaries | reads from `data/results_filtered/`, uses `data/kartaslovsent.csv`, `data/rusentilex.csv` |
 
 ## Architecture & quirks
 
@@ -30,7 +32,7 @@ No build system, no linter, no typechecker, no tests. Just direct `python script
 `parsar.py`, `batch_setniment_analyzer.py`, `slovari_script_new.py`, and `TryToParse_new.py` all define `resource_path()` using `sys._MEIPASS`. The project was designed to be packaged as a Windows `.exe`. File paths resolved via this function need to work both in dev and in bundled builds.
 
 ### VK API tokens — exposed
-A real VK API token is hardcoded in `parsar.py:63` and stored in `vk_token.txt` (not in `.gitignore`). **Never commit new tokens.** The GUI app reads/writes `vk_token.txt` at runtime.
+A real VK API token is hardcoded in `src/parsar.py:63` and stored in `vk_token.txt` (not in `.gitignore`). **Never commit new tokens.** The GUI app reads/writes `vk_token.txt` at runtime.
 
 ### Sentiment dictionaries — two formats
 - **`data/kartaslovsent.csv`** — semicolon-delimited, columns: `term;tag;value;...`, uses fractional `value` (e.g. `0.08`, `-0.68`)
@@ -43,11 +45,11 @@ Both are looked up via `resource_path()` — do not move or rename them without 
 
 ### Data flow
 ```
-Parsing (parsar.py / TryToParse_new.py)
-  → Sentiment analysis (batch_setniment_analyzer.py / slovari_script_new.py)
-    → Aggregation (slovari_parse_itogi.py)
-      → SDG classification (evaluate_script.py)
-        → Split by SDG class (sdg_prepare_script.py)
+Parsing (src/parsar.py / src/TryToParse_new.py)
+  → Sentiment analysis (src/batch_setniment_analyzer.py / src/slovari_script_new.py)
+    → Aggregation (src/slovari_parse_itogi.py)
+      → SDG classification (src/evaluate_script.py)
+        → Split by SDG class (src/sdg_prepare_script.py)
 ```
 
 ### Output naming convention
@@ -59,3 +61,6 @@ Example: `Астраханская область_посты_2020_filtered_20260
 
 ### analyse.py dependencies
 Requires `combcombcomb.xlsx` and `comb_test_1.xlsx` — these files are **not in the repo** and must be provided externally. Saves models as `random_forest_model.pkl`, `knn_model.pkl`, `tfidf_vectorizer.pkl`.
+
+### LaTeX (курсовая магистра)
+`Latex/NIRLaTeX/` — курсовая работа магистратуры. Сборка: `latexmk -pdf` (читает `latexmkrc`). Класс документа: `SCWorks1.cls` (СГУ, шаблон КНиИТ). Стиль библиографии: ГОСТ 2003 (`ugost2003.bst`, локальная исправленная копия). `References.bib` — пустой шаблон, `References_old.bib` — эталон оформления из диплома бакалавра.

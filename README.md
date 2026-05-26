@@ -14,16 +14,16 @@ pip install -r requirements02022026.txt
 
 | Скрипт | Назначение |
 |---|---|
-| `TryToParse_new.py` | GUI-приложение (CustomTkinter) — 4 вкладки: парсинг, токены, анализ одного файла, мониторинг папок |
-| `parsar.py` | Парсинг VK API (посты, комментарии) |
-| `batch_setniment_analyzer.py` | Пакетный словарный анализ тональности по иерархии папок |
-| `slovari_script_new.py` | Словарный анализ тональности (один файл) |
-| `slovari_parse_itogi.py` | Агрегация статистик тональности в сводный Excel |
-| `evaluate_script.py` | SDG-классификация через ruBERT на Excel-файлах |
-| `sdg_prepare_script.py` | Разбивка результатов SDG по отдельным классам |
-| `analyse.py` | ML-классификация тональности (TF-IDF + Random Forest / KNN) |
-| `razmet_script.py` | Матрицы ошибок для сравнения словарей |
-| `diag.py` | Визуализация региональных данных |
+| `src/TryToParse_new.py` | GUI-приложение (CustomTkinter) — 4 вкладки: парсинг, токены, анализ одного файла, мониторинг папок |
+| `src/parsar.py` | Парсинг VK API (посты, комментарии) |
+| `src/batch_setniment_analyzer.py` | Пакетный словарный анализ тональности по иерархии папок |
+| `src/slovari_script_new.py` | Словарный анализ тональности (один файл) |
+| `src/slovari_parse_itogi.py` | Агрегация статистик тональности в сводный Excel |
+| `src/evaluate_script.py` | SDG-классификация через ruBERT на Excel-файлах |
+| `src/sdg_prepare_script.py` | Разбивка результатов SDG по отдельным классам |
+| `src/analyse.py` | ML-классификация тональности (TF-IDF + Random Forest / KNN) |
+| `src/razmet_script.py` | Матрицы ошибок для сравнения словарей |
+| `src/diag.py` | Визуализация региональных данных |
 
 ## Данные
 
@@ -35,24 +35,24 @@ pip install -r requirements02022026.txt
 
 ```bash
 # GUI
-python3 TryToParse_new.py
+python src/TryToParse_new.py
 
 # SDG классификация (CLI)
-python3 evaluate_script.py --input_folder <путь> --threshold 0.9 --batch_size 24
+python src/evaluate_script.py --input_folder <путь> --threshold 0.9 --batch_size 24
 
 # Пакетный анализ тональности
-python3 batch_setniment_analyzer.py
+python src/batch_setniment_analyzer.py
 
 # Агрегация результатов
-python3 slovari_parse_itogi.py
+python src/slovari_parse_itogi.py
 ```
 
 ## Конвейер обработки
 
 ```
-Парсинг (parsar.py / TryToParse_new.py)
-  → Анализ тональности (batch_setniment_analyzer.py / slovari_script_new.py)
-    → Агрегация (slovari_parse_itogi.py)
-      → SDG-классификация (evaluate_script.py)
-        → Разбивка по классам (sdg_prepare_script.py)
+Парсинг (src/parsar.py / src/TryToParse_new.py)
+  → Анализ тональности (src/batch_setniment_analyzer.py / src/slovari_script_new.py)
+    → Агрегация (src/slovari_parse_itogi.py)
+      → SDG-классификация (src/evaluate_script.py)
+        → Разбивка по классам (src/sdg_prepare_script.py)
 ```

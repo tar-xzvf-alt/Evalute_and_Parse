@@ -5,6 +5,9 @@
 # IDE
 /.vscode/
 
+# Local OpenCode state
+/.opencode/
+
 # Secrets
 vk_token.txt
 
@@ -21,11 +24,17 @@ TEST.csv
 /Астрахань/
 /ПФО_*/
 /*.xlsx
+/Finding_common_development_paths_in_voluntary_nati.pdf
 
 # Analysis script outputs
 /data/sdg_category_analysis/
 /data/sdg_sentiment_analysis/
 /data/results_filtered/
+/data/correlation_analysis/
+/data/region_stats/Region_Pokaz_*/
+
+# Generated LaTeX figures not referenced by the document
+/Latex/NIRLaTeX/fig_grp_vs_sentiment.png
 
 # Model (distributed separately)
 /rubert_bert_RU_35data_6_epochs/

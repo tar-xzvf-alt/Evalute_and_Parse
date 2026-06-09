@@ -58,7 +58,7 @@ def plot_regional_distribution(stats_df, output_dir, timestamp):
         x = np.arange(len(years))
         width = 0.6
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(8, 5))
         bottom = np.zeros(len(years))
         colors = {'Социальные': '#2196F3', 'Экономические': '#FF9800', 'Экологические': '#4CAF50'}
         for cat in CATEGORY_NAMES:
@@ -66,12 +66,13 @@ def plot_regional_distribution(stats_df, output_dir, timestamp):
             ax.bar(x, vals, width, bottom=bottom, label=cat, color=colors.get(cat, '#999'))
             bottom += vals
 
-        ax.set_xlabel('Год')
-        ax.set_ylabel('Количество текстов')
-        ax.set_title(f'{region} — распределение по категориям ЦУР')
+        ax.set_xlabel('Год', fontsize=14)
+        ax.set_ylabel('Количество текстов', fontsize=14)
+        ax.set_title(f'{region} — распределение по категориям ЦУР', fontsize=15)
         ax.set_xticks(x)
-        ax.set_xticklabels(years)
-        ax.legend(loc='upper right')
+        ax.set_xticklabels(years, fontsize=12)
+        ax.tick_params(axis='y', labelsize=12)
+        ax.legend(loc='upper right', fontsize=12)
         plt.tight_layout()
         safe_region = region.replace(' ', '_').replace('/', '_')
         chart_path = os.path.join(output_dir, f'{safe_region}_категории_ЦУР_{timestamp}.png')

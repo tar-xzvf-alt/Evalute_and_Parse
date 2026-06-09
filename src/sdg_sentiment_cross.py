@@ -106,20 +106,21 @@ def plot_sentiment_by_category(all_results, output_dir, timestamp):
             if piv.empty:
                 continue
 
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(8, 5))
             colors = {'Социальные': '#2196F3', 'Экономические': '#FF9800', 'Экологические': '#4CAF50'}
             markers = {'Социальные': 'o', 'Экономические': 's', 'Экологические': '^'}
             for cat in CATEGORY_NAMES:
                 if cat in piv.columns:
                     ax.plot(piv.index, piv[cat], marker=markers.get(cat, 'x'),
-                            color=colors.get(cat, '#999'), linewidth=2, label=cat)
+                            color=colors.get(cat, '#999'), linewidth=2, label=cat, markersize=8)
 
-            ax.set_xlabel('Год')
-            ax.set_ylabel('% позитивных текстов')
-            ax.set_title(f'{region} — тональность по категориям ЦУР ({dict_name})')
-            ax.legend(loc='best')
+            ax.set_xlabel('Год', fontsize=14)
+            ax.set_ylabel('% позитивных текстов', fontsize=14)
+            ax.set_title(f'{region} — тональность по категориям ЦУР', fontsize=15)
+            ax.legend(loc='best', fontsize=12)
             ax.set_ylim(0, 100)
             ax.grid(True, alpha=0.3)
+            ax.tick_params(axis='both', labelsize=12)
             plt.tight_layout()
             safe_r = region.replace(' ', '_').replace('/', '_')
             chart_path = os.path.join(output_dir, f'{safe_r}_sentiment_{dict_name}_{timestamp}.png')
@@ -138,15 +139,16 @@ def plot_regional_comparison(all_results, output_dir, timestamp):
         if piv.empty:
             continue
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(8, 5))
         for region in piv.columns:
-            ax.plot(piv.index, piv[region], marker='o', linewidth=2, label=region)
-        ax.set_xlabel('Год')
-        ax.set_ylabel('% позитивных текстов (экономическая повестка)')
-        ax.set_title(f'Сравнение регионов — тональность экономических ЦУР ({dict_name})')
-        ax.legend(loc='best')
+            ax.plot(piv.index, piv[region], marker='o', linewidth=2, label=region, markersize=8)
+        ax.set_xlabel('Год', fontsize=14)
+        ax.set_ylabel('% позитивных текстов (экономическая повестка)', fontsize=14)
+        ax.set_title(f'Сравнение регионов — тональность экономических ЦУР', fontsize=15)
+        ax.legend(loc='best', fontsize=12)
         ax.set_ylim(0, 100)
         ax.grid(True, alpha=0.3)
+        ax.tick_params(axis='both', labelsize=12)
         plt.tight_layout()
         chart_path = os.path.join(output_dir, f'сравнение_регионов_эконом_{dict_name}_{timestamp}.png')
         plt.savefig(chart_path, dpi=150)

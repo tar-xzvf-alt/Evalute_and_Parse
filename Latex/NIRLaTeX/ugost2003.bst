@@ -694,22 +694,7 @@ FUNCTION {bbl.ppage}
 if$}
 
 FUNCTION {bbl.url}
-{ curlanguage "english" =
-   {"Access mode"}
-   { curlanguage "ukrainian" =
-      { "{^^d0^^a0^^d0^^b5^^d0^^b6^^d0^^b8^^d0^^bc ^^d0^^b4^^d0^^be^^d1^^81^^d1^^82^^d1^^83^^d0^^bf^^d1^^83}" }
-      { curlanguage "russian" =
-         { "{^^d0^^a0^^d0^^b5^^d0^^b6^^d0^^b8^^d0^^bc ^^d0^^b4^^d0^^be^^d1^^81^^d1^^82^^d1^^83^^d0^^bf^^d0^^b0}" }
-         { curlanguage "german" =
-            { "{online; abgerufen}" }
-            { curlanguage "french" =
-                { "Mode d'acc\`{e}s" }
-                { "language is not defined: " curlanguage " in bbl.url" * * warning$ "online; accessed" }
-            if$}
-         if$}
-      if$}
-   if$}
-if$}
+{ "URL" }
 FUNCTION {bbl.urldate}
 { curlanguage "english" =
    {"online; accessed"}

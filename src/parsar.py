@@ -23,7 +23,7 @@ def GetComments(domain, dt1, dt2, minimal, words,user_token):
     searched_comments = []
     all_comments = []
 
-    searched_posts = GetPosts(domain, dt1, dt2, words)
+    searched_posts = GetPosts(domain, dt1, dt2, words, user_token)
     start = time.time()
     offset = 0
     for post in searched_posts:
@@ -32,7 +32,7 @@ def GetComments(domain, dt1, dt2, minimal, words,user_token):
 
             print(offset)
             time.sleep(0.5)
-            code2 = """return API.wall.getComments({"owner_id": """ + f"{post['owner_id']}" + f""","post_id": {post['id']}""" + ""","v": \"5.131\"""" + f""","count": 100""" + """});"""
+            code2 = """return API.wall.getComments({"owner_id": """ + f"{post['owner_id']}" + f""","post_id": {post['id']}""" + ""","v": \"5.131\"""" + f""","count": 100,"offset": {offset1}""" + """});"""
 
             response2 = requests.post("https://api.vk.com/method/execute",
                                       data={
@@ -58,95 +58,33 @@ def GetComments(domain, dt1, dt2, minimal, words,user_token):
     return all_comments
 
 
-def GetPosts(domain, dt1, dt2, words):
+def GetPosts(domain, dt1, dt2, words, user_token=None, minimal=0):
+    """Compatibility adapter for the old post/comment workflow."""
+    from vk_collection import VKClient, WallPeriod
 
-    token = "10e12b7710e12b7710e12b777413dfe46a110e110e12b77796a0e3ef3773f2ac46557be"
-             
-    version = "5.131"
-
-    searched_posts = []
-    all_searched_posts = []
-
-    url = f'https://api.vk.com/method/wall.get?access_token={token}&v=5.131&domain={domain}'
+    if user_token is None:
+        with open(resource_path('vk_token.txt'), encoding='utf-8') as token_file:
+            user_token = token_file.read().strip()
+    client = VKClient(user_token)
     try:
-        posts_response = requests.get(url)
-    except:
-        print("Сообщество пропущено")
-    else:
-        posts_count = posts_response.json()['response']['count']
-
-        print(f"Всего постов в группе:{posts_count}")
-
-        offset = 0
-        start = time.time()
-
-        RegularExpression = ''
-
-        keywords = words.lower().split(',')
-
-        if len(keywords[0].split()) > 1:
-            for keyword in keywords[0].split():
-                word = snowball.stem(keyword)
-                RegularExpression += word+'.*'
-            RegularExpression += '|'
-
-            for keyword in reversed(keywords[0].split()):
-                word = snowball.stem(keyword)
-                RegularExpression += word + '.*'
+        if str(domain).isdigit():
+            group_id = int(domain)
         else:
-            RegularExpression += snowball.stem(keywords[0])
-
-        if len(keywords) > 1:
-            for i in range(1, len(keywords)):
-
-                RegularExpression += '|'
-
-                for keyword in keywords[i].split():
-                    word = snowball.stem(keyword)
-                    RegularExpression += word + '.*'
-
-                RegularExpression += '|'
-
-                for keyword in keywords[i].split():
-                    word = snowball.stem(keyword)
-                    RegularExpression += word + '.*'
-
-        while offset < posts_count:
-
-            code1 = """return API.wall.get({"domain": """ + f"\"{domain}\"" + ""","offset": """ + str(
-                offset) + ""","count": 100,"extended": 0,"v": "5.131"});"""
-
-            response1 = requests.post("https://api.vk.com/method/execute",
-                                      data={
-                                          "code": code1,
-                                          "access_token": token,
-                                          "v": version
-                                      }
-                                      )
-            data1 = response1.json()['response']['items']
-
-            if data1[50]['date'] < dt1:
-                break
-
-            for post in data1:
-                if (re.search(rf"{RegularExpression}", rf"{post['text'].lower()}") != None) and (post['date'] < dt2) and (post['date'] > dt1):
-                    searched_posts.append(post)
-
-            offset += 100
-            end = time.time() - start
-
-            all_searched_posts.extend(searched_posts)
-            print(f"Обработано {offset} постов за {end} секунд из них {len(all_searched_posts)} отобрано")
-            searched_posts.clear()
+            groups = client.call('groups.getById', group_ids=str(domain))
+            group_id = groups[0]['id']
+        terms = [term.strip().casefold() for term in words.split(',') if term.strip()]
+        return [post for post in WallPeriod(client, group_id, dt1, dt2).posts()
+                if len(post.get('text', '').split()) >= int(minimal)
+                and (not terms or any(term in post.get('text', '').casefold() for term in terms))]
     finally:
-        return all_searched_posts
+        client.session.close()
 
 def file_writer(data, theme, dt1, dt2,output_path):
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
     i = 1
     for post in data:
-        if (post['date'] < dt2) and (post['date'] > dt1) and (post['text'] != ' '):
+        if (post['date'] < dt2) and (post['date'] >= dt1) and (post['text'] != ' '):
             worksheet['A'+str(i)] = post['text']
             i += 1
 
@@ -156,11 +94,11 @@ def file_writer(data, theme, dt1, dt2,output_path):
 
 
 
-def ParseGroupsPosts(city, groups, dt1, dt2, region, minimal, words):
+def ParseGroupsPosts(city, groups, dt1, dt2, region, minimal, words, user_token=None):
     posts = []
     for group in groups:
         #print(f"Группа {group['name']}")
-        posts += GetPosts(group['screen_name'], dt1, dt2, words)
+        posts += GetPosts(group['id'], dt1, dt2, words, user_token, minimal)
     return posts
 
 
@@ -190,7 +128,7 @@ def MainParsePosts(city, dt1, dt2, count, region, minimal, words,user_token):
 
     groups = response.json()['response']['items']
 
-    groups_posts = ParseGroupsPosts(city, groups, dt1, dt2, region, minimal, words)
+    groups_posts = ParseGroupsPosts(city, groups, dt1, dt2, region, minimal, words, user_token)
 
     return groups_posts
 

@@ -4,17 +4,30 @@
 
 ## Установка
 
+### GUI и словарный анализ
+
+На Linux используйте системный Python с Tk/Xft для сглаженных шрифтов:
+
+```bash
+bash scripts/setup_gui_env.sh
+bash run_gui.sh
+```
+
+Скрипт создаёт отдельное `.venv-gui` и устанавливает `requirements-gui.txt`, не изменяя окружение TensorFlow. Python должен поддерживать `tkinter` и `venv`; на других системах можно создать окружение вручную и установить тот же файл зависимостей. На Windows рекомендуется Python с официальной сборкой Tk.
+
+### SDG-модель и старые ML-скрипты
+
 ```bash
 pip install -r requirements02022026.txt
 ```
 
-Требуется Python 3.10.
+Для TensorFlow 2.10.1 требуется Python 3.10. Это ограничение не относится к отдельному окружению GUI.
 
 ## Состав
 
 | Скрипт | Назначение |
 |---|---|
-| `src/TryToParse_new.py` | GUI-приложение (CustomTkinter) — 4 вкладки: парсинг, токены, анализ одного файла, мониторинг папок |
+| `src/TryToParse_new.py` | GUI: выбор источников и сбор по годам, прежний сбор комментариев, токены, словарный и сводный анализ |
 | `src/parsar.py` | Парсинг VK API (посты, комментарии) |
 | `src/batch_setniment_analyzer.py` | Пакетный словарный анализ тональности по иерархии папок |
 | `src/slovari_script_new.py` | Словарный анализ тональности (один файл) |
@@ -34,8 +47,8 @@ pip install -r requirements02022026.txt
 ## Запуск
 
 ```bash
-# GUI
-python src/TryToParse_new.py
+# GUI (после установки окружения)
+bash run_gui.sh
 
 # SDG классификация (CLI)
 python src/evaluate_script.py --input_folder <путь> --threshold 0.9 --batch_size 24
@@ -48,6 +61,14 @@ python src/slovari_parse_itogi.py
 ```
 
 ## Конвейер обработки
+
+Подробная инструкция по выбору сообществ, автоподбору, профилям и форматам выгрузки: [docs/vk-collection.md](docs/vk-collection.md).
+
+Проверки приложения:
+
+```bash
+.venv-gui/bin/python -m unittest discover -s tests -v
+```
 
 ```
 Парсинг (src/parsar.py / src/TryToParse_new.py)

@@ -1,0 +1,9 @@
+# GUI and dictionary analysis only. TensorFlow/SDG stay in Python 3.10.
+customtkinter>=5.2,<6
+requests>=2.31,<3
+openpyxl>=3.1,<4
+Pillow>=10
+pandas>=2
+matplotlib>=3.8
+nltk>=3.8
+pymorphy3>=2

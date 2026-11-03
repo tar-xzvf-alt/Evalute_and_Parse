@@ -1,4 +1,5 @@
 /myenv/
+/.venv-gui/
 /__pycache__/
 *.pyc
 
@@ -33,18 +34,8 @@ TEST.csv
 /data/correlation_analysis/
 /data/region_stats/Region_Pokaz_*/
 
-# Generated LaTeX figures not referenced by the document
-/Latex/NIRLaTeX/fig_grp_vs_sentiment.png
+# Research documents are archived outside this application repository.
+/Latex/
 
 # Model (distributed separately)
 /rubert_bert_RU_35data_6_epochs/
-
-# LaTeX build artifacts
-*.aux
-*.bbl
-*.blg
-*.toc
-*.out
-*.synctex.gz
-*.fls
-*.fdb_latexmk

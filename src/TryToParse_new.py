@@ -14,6 +14,8 @@ import slovari_script_new
 import slovari_parse_itogi
 from openpyxl import Workbook
 import pandas as pd
+from collection_ui import CollectionPanel
+from ui_theme import prepare_theme, configure_typography
 
 df_left = []
 
@@ -394,16 +396,17 @@ def analyse_global():
 
 
 # Настройки темы
-ctk.set_appearance_mode("light")
-ctk.set_default_color_theme("blue")
+prepare_theme()
 
 # Главное окно
 root = ctk.CTk()
 
+font_family, font_rasterizer = configure_typography(root)
+
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 
-width,height = 700,800
+width, height = min(1180, screen_width - 60), min(850, screen_height - 80)
 
 # Вычисляем позицию для центрирования
 x = (screen_width // 2) - (width // 2)
@@ -411,27 +414,43 @@ y = (screen_height // 2) - (height // 2)
 
 
 root.geometry(f"{width}x{height}+{x}+{y}")
+root.minsize(min(960, width), min(680, height))
 
-root.title("ParseVK")
+root.title("ParseVK — региональная новостная аналитика")
 
 # Вкладки
-tabview = ctk.CTkTabview(master=root, width=680, height=680)
-tabview.pack(padx=10, pady=10)
-tabview.add("Парсинг")
+tabview = ctk.CTkTabview(master=root, width=680, height=680, corner_radius=8)
+tabview.pack(padx=18, pady=14, fill="both", expand=True)
+tabview.add("Сбор новостей")
+tabview.add("Прежний сбор")
 tabview.add("API Токен")
 tabview.add("Анализ среза")
 tabview.add("Мониторинг срезов")
 
 
-tab_parse = tabview.tab("Парсинг")
+tab_parse = tabview.tab("Прежний сбор")
 tab_token = tabview.tab("API Токен")
 tab_stats = tabview.tab("Анализ среза")
 tab_stats_spec = tabview.tab("Мониторинг срезов")
 
+collection_panel = CollectionPanel(tabview.tab("Сбор новостей"),
+                                   lambda: entry_token.get().strip(), font_family)
+collection_panel.pack(fill="both", expand=True)
+if font_rasterizer == "x11":
+    collection_panel.status.configure(text="Tk без сглаживания шрифтов. Для чёткого текста: bash scripts/setup_gui_env.sh, затем bash run_gui.sh")
+tabview.set("Сбор новостей")
+
+# The old workflow remains available for comments and compatibility. Its long
+# form scrolls instead of clipping controls on small displays.
+legacy_parse_tab = tab_parse
+tab_parse = ctk.CTkScrollableFrame(legacy_parse_tab)
+tab_parse.pack(fill="both", expand=True)
+ctk.CTkLabel(tab_parse, text="Прежний сбор постов и комментариев. Новый сбор — во вкладке «Сбор новостей».").pack(pady=6)
+
 # ============ Вкладка "Парсинг" ============
 
 # Период
-ctk.CTkLabel(tab_parse, text="Укажите период", font=("Arial", 14)).pack(pady=(15, 5))
+ctk.CTkLabel(tab_parse, text="Укажите период", font=(font_family, 18, "bold")).pack(pady=(15, 5))
 frame_dates = ctk.CTkFrame(tab_parse, fg_color="transparent")
 frame_dates.pack(pady=5)
 
@@ -461,7 +480,7 @@ def update_dates_from_year():
 entry_year.bind("<FocusOut>", lambda e: update_dates_from_year())
 
 # Выборка
-ctk.CTkLabel(tab_parse, text="Выборка", font=("Arial", 14)).pack(pady=(10, 5))
+ctk.CTkLabel(tab_parse, text="Выборка", font=(font_family, 18, "bold")).pack(pady=(10, 5))
 
 entry_keywords_search = ctk.CTkEntry(tab_parse, placeholder_text="Ключевые слова для поиска сообществ", width=500)
 entry_keywords_search.pack(pady=5)
@@ -476,7 +495,7 @@ entry_keywords = ctk.CTkEntry(tab_parse, placeholder_text="Ключевые сл
 entry_keywords.pack(pady=5)
 
 # Запись в файл
-ctk.CTkLabel(tab_parse, text="Запись в файл", font=("Arial", 14)).pack(pady=(10, 5))
+ctk.CTkLabel(tab_parse, text="Запись в файл", font=(font_family, 18, "bold")).pack(pady=(10, 5))
 # Рамка для выбора папки
 frame_folder = ctk.CTkFrame(tab_parse)
 frame_folder.pack(pady=10, padx=10, fill="x")
@@ -499,7 +518,7 @@ checkbox_comments.pack(side="left", padx=10, pady=5)
 
 # Прогресс
 progressbar = ctk.CTkProgressBar(tab_parse, width=400)
-progressbar.set(0.5)
+progressbar.set(0)
 progressbar.pack(pady=10)
 
 # Статус
@@ -512,7 +531,7 @@ btn_start = ctk.CTkButton(tab_parse, text="Запуск",
                     command=lambda: threading.Thread(target=get_and_parse_theme,
                                                      args=(entry_keywords_search.get(), entry_keywords.get(), entry_year.get(),entry_from.get(), entry_to.get(), entry_folder_parse.get()),
                                                      daemon=True).start(),
-                    font=('Arial', 16, 'bold'),
+                    font=(font_family, 16, 'bold'),
                     width=70,
                     height=30
                     )
@@ -520,7 +539,7 @@ btn_start.pack(pady=10)
 
 
 # ============ Вкладка "Статистика" ============
-label_stats = ctk.CTkLabel(tab_stats, text="Анализ собранной информации", font=("Arial", 14))
+label_stats = ctk.CTkLabel(tab_stats, text="Анализ собранной информации", font=(font_family, 20, "bold"))
 label_stats.pack(pady=20)
 
 # Выбор словарей
@@ -558,7 +577,7 @@ folder_button.pack(side="left", padx=5, pady=10)
 
 # Прогресс
 progressbar_analyse = ctk.CTkProgressBar(tab_stats, width=400)
-progressbar_analyse.set(0.5)
+progressbar_analyse.set(0)
 progressbar_analyse.pack(pady=5)
 
 # Статус
@@ -570,12 +589,12 @@ analyse_button = ctk.CTkButton(tab_stats, text="Запустить анализ"
 analyse_button.pack(pady=10)
 
 # Место под график
-graph_img_label = ctk.CTkLabel(tab_stats, text="[ Здесь появится график ]", font=("Arial", 16), text_color="gray")
+graph_img_label = ctk.CTkLabel(tab_stats, text="Здесь появится график после анализа", font=(font_family, 18), text_color="gray")
 graph_img_label.pack(pady=20)
 
 
 # ============ Вкладка "Сводный анализ" ============
-label_stats = ctk.CTkLabel(tab_stats_spec, text="Сводный анализ информации", font=("Arial", 14))
+label_stats = ctk.CTkLabel(tab_stats_spec, text="Сводный анализ информации", font=(font_family, 20, "bold"))
 label_stats.pack(pady=20)
 
 # Рамка для выбора файла
@@ -590,7 +609,7 @@ browse_button_spec.pack(side="left", padx=5, pady=10)
 
 # Прогресс
 progressbar_analyse_spec = ctk.CTkProgressBar(tab_stats_spec, width=400)
-progressbar_analyse_spec.set(0.5)
+progressbar_analyse_spec.set(0)
 progressbar_analyse_spec.pack(pady=5)
 
 # Статус
@@ -669,17 +688,17 @@ def open_link():
     webbrowser.open("https://oauth.vk.com/authorize?client_id=54447901&display=page&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.131")
 
 
-label_token = ctk.CTkLabel(tab_token, text="Токен VK API", font=("Arial", 14))
+label_token = ctk.CTkLabel(tab_token, text="Токен VK API", font=(font_family, 20, "bold"))
 label_token.pack(pady=5)
-entry_token = ctk.CTkEntry(tab_token, width=500, placeholder_text="Введите ваш токен")
+entry_token = ctk.CTkEntry(tab_token, width=500, placeholder_text="Введите ваш токен", show="•")
 entry_token.pack(pady=5)
 
 # Загружаем токен при инициализации
-if load_token():
-    messagebox.showinfo("Результат загрузки токена", "Валидный токен для работы уже загружен из сохранения")
-else:
-    messagebox.showinfo("Результат загрузки токена", "Токен для работы не был загружен из сохранения или не валиден.\n"
-                                                     "Для получения, проверки и сохранения токена перейдите на соответствующую вкладку")
+# Loading a local credential must not block startup on a network request.
+token_path = resource_path('vk_token.txt')
+if os.path.isfile(token_path):
+    with open(token_path, encoding="utf-8") as token_file:
+        entry_token.insert(0, token_file.read().strip())
 
 # Фрейм для кнопок сохранения и проверки
 button_top_frame = ctk.CTkFrame(tab_token)

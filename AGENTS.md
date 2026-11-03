@@ -4,18 +4,23 @@
 Russian VK social media parser + dictionary-based sentiment analysis (Kartaslovsent, RuSentiLex) + ruBERT-based SDG classification (17 UN goals). GUI app (`src/TryToParse_new.py`) wraps all functionality.
 
 ## Setup
+For the GUI on Linux use `bash scripts/setup_gui_env.sh`, then `bash run_gui.sh`. This creates a separate `.venv-gui` using system Tk/Xft; `myenv` was built with non-antialiased X11 fonts. Read `docs/vk-collection.md` for runtime details. GUI dependencies are in `requirements-gui.txt`.
+
+For the TensorFlow SDG model / legacy ML environment:
 ```bash
 pip install -r requirements02022026.txt
 ```
 Python 3.10 required — TensorFlow 2.10.1 and `tensorflow-addons` are pinned and won't install on newer Python.
 
-No build system, no linter, no typechecker, no tests. Just direct `python script.py` invocations.
+No build system, no linter, no typechecker. Collection regression tests: `.venv-gui/bin/python -m unittest discover -s tests -v` (or the configured Python environment). Entrypoints use direct `python script.py` invocations.
+
+For the new collection workbench, profile format, UTC date boundaries, and export files, read `docs/vk-collection.md`. `src/vk_collection.py` is the Tk-independent backend; `src/collection_ui.py` is the queue-driven GUI panel.
 
 ## Entrypoints
 
 | Script | Purpose | Args |
 |---|---|---|
-| `src/TryToParse_new.py` | GUI app (CustomTkinter) — 4 tabs: parsing, token mgmt, single-file analysis, multi-folder analysis | none |
+| `src/TryToParse_new.py` | GUI app (CustomTkinter) — collection workbench, legacy collection/comments, token mgmt, single-file analysis, multi-folder analysis | none |
 | `src/evaluate_script.py` | Batch SDG classification via ruBERT on Excel files | `--input_folder <path>` (required), `--threshold 0.9`, `--batch_size 24`, `--model_path rubert_bert_RU_35data_6_epochs/`, etc. |
 | `src/batch_setniment_analyzer.py` | Batch dictionary sentiment analysis on folder hierarchies | none (hardcoded paths inside) |
 | `src/slovari_parse_itogi.py` | Aggregate per-file sentiment stats into master Excel | none |
@@ -31,8 +36,8 @@ No build system, no linter, no typechecker, no tests. Just direct `python script
 ### PyInstaller compatibility
 `parsar.py`, `batch_setniment_analyzer.py`, `slovari_script_new.py`, and `TryToParse_new.py` all define `resource_path()` using `sys._MEIPASS`. The project was designed to be packaged as a Windows `.exe`. File paths resolved via this function need to work both in dev and in bundled builds.
 
-### VK API tokens — exposed
-A real VK API token is hardcoded in `src/parsar.py:63` and stored in `vk_token.txt` (not in `.gitignore`). **Never commit new tokens.** The GUI app reads/writes `vk_token.txt` at runtime.
+### VK API tokens
+The GUI reads/writes the gitignored `vk_token.txt` at runtime. The old hardcoded post-collection token was removed; treat any credentials in Git history as exposed. **Never commit tokens or include them in exported profiles, diagnostics, or manifests.**
 
 ### Sentiment dictionaries — two formats
 - **`data/kartaslovsent.csv`** — semicolon-delimited, columns: `term;tag;value;...`, uses fractional `value` (e.g. `0.08`, `-0.68`)
@@ -62,5 +67,5 @@ Example: `Астраханская область_посты_2020_filtered_20260
 ### analyse.py dependencies
 Requires `combcombcomb.xlsx` and `comb_test_1.xlsx` — these files are **not in the repo** and must be provided externally. Saves models as `random_forest_model.pkl`, `knn_model.pkl`, `tfidf_vectorizer.pkl`.
 
-### LaTeX (курсовая магистра)
-`Latex/NIRLaTeX/` — курсовая работа магистратуры. Сборка: `latexmk -pdf` (читает `latexmkrc`). Класс документа: `SCWorks1.cls` (СГУ, шаблон КНиИТ). Стиль библиографии: ГОСТ 2003 (`ugost2003.bst`, локальная исправленная копия). `References.bib` — пустой шаблон, `References_old.bib` — эталон оформления из диплома бакалавра.
+### Repository scope
+LaTeX papers, research reading notes, and thesis-planning material were moved to an external local archive at the user's request. Keep application code, tests, dictionaries, and operational documentation here; do not restore research PDFs or build artifacts as application assets.

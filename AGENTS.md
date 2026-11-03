@@ -16,10 +16,13 @@ No build system, no linter, no typechecker. Collection regression tests: `.venv-
 
 For the new collection workbench, profile format, UTC date boundaries, and export files, read `docs/vk-collection.md`. `src/vk_collection.py` is the Tk-independent backend; `src/collection_ui.py` is the queue-driven GUI panel.
 
+For headless collection commands or automation, read `docs/cli.md`. Run `python -m parsevk` from the repo root (minimal dependencies: `requirements-cli.txt`). `src/collection_workflow.py` owns shared GUI/CLI validation, assessment and automatic selection; keep these rules out of frontend-specific code. CLI regression tests inject a fake client in subprocesses, never real credentials/network. CLI must not import Tk, GUI widgets, NLTK or TensorFlow.
+
 ## Entrypoints
 
 | Script | Purpose | Args |
 |---|---|---|
+| `parsevk.py` / `python -m parsevk` | Headless VK collection: search, assess, verify, select, collect, run saved GUI profiles | `--help`; see `docs/cli.md` |
 | `src/TryToParse_new.py` | GUI app (CustomTkinter) — collection workbench, legacy collection/comments, token mgmt, single-file analysis, multi-folder analysis | none |
 | `src/evaluate_script.py` | Batch SDG classification via ruBERT on Excel files | `--input_folder <path>` (required), `--threshold 0.9`, `--batch_size 24`, `--model_path rubert_bert_RU_35data_6_epochs/`, etc. |
 | `src/batch_setniment_analyzer.py` | Batch dictionary sentiment analysis on folder hierarchies | none (hardcoded paths inside) |

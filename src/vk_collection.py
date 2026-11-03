@@ -21,7 +21,7 @@ class Cancelled(CollectionError):
 class VKClient:
     def __init__(self, token, cancel=None):
         if not token.strip():
-            raise CollectionError("Укажите токен на вкладке «API Токен».")
+            raise CollectionError("Не указан токен VK API.")
         self.token = token.strip()
         self.cancel = cancel or threading.Event()
         self.session = requests.Session()
@@ -217,11 +217,19 @@ def save_profile(path, settings, groups):
 
 def load_profile(path):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if data.get("version") != 1 or not isinstance(data.get("settings"), dict):
+    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("settings"), dict):
         raise CollectionError("Неподдерживаемый профиль.")
+    if not isinstance(data.get("groups"), list):
+        raise CollectionError("Профиль должен содержать список groups.")
+    seen = set()
     for group in data["groups"]:
-        if type(group["id"]) is not int or group["id"] <= 0 or not isinstance(group["name"], str):
+        if (not isinstance(group, dict) or type(group.get("id")) is not int
+                or group["id"] <= 0 or not isinstance(group.get("name"), str)
+                or type(group.get("selected", False)) is not bool):
             raise CollectionError("Некорректное сообщество в профиле.")
+        if group["id"] in seen:
+            raise CollectionError("Повтор ID сообщества в профиле.")
+        seen.add(group["id"])
     return data
 
 
@@ -282,11 +290,11 @@ def export_posts(folder, rows, client, year, keywords="", min_words=0, progress=
             book.save(path)
             result.update(status="complete", available=collected, retained=kept, file=path.name)
         manifest["status"] = "complete"
-    except Exception:
+    except BaseException as error:
         if "sheet" in locals():
             sheet.close()
             book.close()
-        manifest["status"] = "cancelled" if client.cancel.is_set() else "failed"
+        manifest["status"] = "cancelled" if client.cancel.is_set() or isinstance(error, KeyboardInterrupt) else "failed"
         if manifest["groups"]:
             manifest["groups"][-1]["status"] = manifest["status"]
         raise

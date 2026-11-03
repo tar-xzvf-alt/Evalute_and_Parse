@@ -7,9 +7,9 @@ from tkinter import filedialog, messagebox, ttk
 
 import customtkinter as ctk
 
-from vk_collection import (Cancelled, CollectionError, VKClient, WallPeriod,
-                           export_posts, load_profile, measure, save_profile,
-                           select_groups, year_period)
+from vk_collection import (Cancelled, CollectionError, VKClient,
+                           export_posts, load_profile, save_profile)
+from collection_workflow import assess_groups, normalize_settings, search_groups
 from ui_theme import BORDER, MUTED, TEXT, secondary
 
 
@@ -117,14 +117,7 @@ class CollectionPanel(ctk.CTkFrame):
     def settings(self):
         settings = {k: widget.get().strip() for k, widget in self.entries.items()}
         settings["mode"] = self.mode.get()
-        year_period(settings["year"])
-        for key, low, high in (("candidates", 1, 1000), ("maximum", 1, 1000),
-                               ("minimum", 0, 100000000), ("min_words", 0, 100000)):
-            value = int(settings[key])
-            if not low <= value <= high:
-                raise CollectionError(f"Параметр {key}: допустимо от {low} до {high}.")
-            settings[key] = value
-        return settings
+        return normalize_settings(settings)
 
     def begin(self, operation):
         if self.busy:
@@ -239,8 +232,7 @@ class CollectionPanel(ctk.CTkFrame):
 
     def search(self):
         def run(client, settings):
-            rows = [{"id": g["id"], "name": g["name"], "selected": False}
-                    for g in client.search(settings["query"], settings["candidates"])]
+            rows = search_groups(client, settings)
             if settings["mode"] == "Автоматически":
                 self.assess(client, settings, rows, automatic=True)
             else:
@@ -249,36 +241,8 @@ class CollectionPanel(ctk.CTkFrame):
         self.begin(run)
 
     def assess(self, client, settings, rows, exact=False, automatic=False):
-        start, end = year_period(settings["year"])
-        for row in rows:
-            self.messages.put(("status", "Проверка: " + row["name"]))
-            row.pop("error", None)
-            row.pop("months", None)
-            row["verified"] = False
-            row["count"] = None
-            try:
-                period = WallPeriod(client, row["id"], start, end)
-                row["count"] = period.estimate()
-                row["year"] = settings["year"]
-                # Exact pass near the threshold. All potential automatic winners
-                # are verified too, so ranking is not decided by estimates alone.
-                near = abs(row["count"] - settings["minimum"]) <= max(10, settings["minimum"] * .1)
-                if exact or (automatic and (near or row["count"] >= settings["minimum"])):
-                    row["count"], row["months"] = measure(period)
-                    row["verified"] = True
-                row["status"] = "Проверено" if row["verified"] else "Оценка по границам"
-            except Cancelled:
-                raise
-            except CollectionError as error:
-                row.update(error=str(error), status=str(error), count=None)
-        if automatic:
-            chosen = {r["id"] for r in select_groups(rows, settings["maximum"], settings["minimum"])}
-            for row in rows:
-                row["selected"] = row["id"] in chosen
-                if row.get("error"):
-                    continue
-                row["status"] = ("Выбрано по активности" if row["selected"] else
-                                 "Ниже порога" if row["count"] < settings["minimum"] else "За пределами K")
+        assess_groups(client, settings, rows, exact=exact, automatic=automatic,
+                      progress=lambda text: self.messages.put(("status", text)))
         self.messages.put(("rows", rows))
         self.messages.put(("status", f"Проверка завершена. Запросов API: {client.calls}. Двойной щелчок — месяцы."))
 

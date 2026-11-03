@@ -46,6 +46,17 @@ pip install -r requirements02022026.txt
 
 ## Запуск
 
+### CLI без графической среды
+
+```bash
+.venv-gui/bin/python -m parsevk --help
+.venv-gui/bin/python -m parsevk search --query "Омск новости" --limit 20 --output candidates.json
+```
+
+Поиск, оценка активности, месячные подсчёты, автоотбор и запуск профиля доступны без Tk/дисплея. Минимальные зависимости — `requirements-cli.txt`. Инструкция и примеры полного процесса: [docs/cli.md](docs/cli.md).
+
+### GUI и существующие скрипты
+
 ```bash
 # GUI (после установки окружения)
 bash run_gui.sh

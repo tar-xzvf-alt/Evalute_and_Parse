@@ -1,5 +1,7 @@
 /myenv/
 /.venv-gui/
+/.venv-cli/
+/data/raw/
 /__pycache__/
 *.pyc
 

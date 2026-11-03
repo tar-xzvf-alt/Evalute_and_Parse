@@ -168,6 +168,42 @@ class CLITests(unittest.TestCase):
             self.assertTrue((output / manifest["groups"][0]["file"]).is_file())
             self.assertEqual(manifest["groups"][1]["status"], status)
 
+    def test_cli_resume_keeps_first_file_and_completes_second(self):
+        result = self.invoke('collect', '--groups', '1,99', '--year', '2019',
+                             '--min-words', '0', '--output', self.directory)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        old_path = next(self.directory.glob('collection_*.json'))
+        old = json.loads(old_path.read_text())
+        first_path = self.directory / old['groups'][0]['file']
+        first_bytes = first_path.read_bytes()
+        self.env['FIXTURE_ALLOW_99'] = '1'
+        result = self.invoke('collect', '--groups', '1,99', '--year', '2019',
+                             '--min-words', '0', '--output', self.directory,
+                             '--resume', old_path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        current = json.loads(Path(json.loads(result.stdout)['manifest']).read_text())
+        self.assertEqual(current['status'], 'complete')
+        self.assertTrue(current['groups'][0]['reused'])
+        self.assertEqual(first_path.read_bytes(), first_bytes)
+        self.assertEqual(current['groups'][0]['file'], old['groups'][0]['file'])
+        self.assertEqual(current['groups'][1]['status'], 'complete')
+
+    def test_resume_includes_source_not_attempted_after_first_failure(self):
+        result = self.invoke('collect', '--groups', '99,1', '--year', '2019',
+                             '--min-words', '0', '--output', self.directory)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        old_path = next(self.directory.glob('collection_*.json'))
+        old = json.loads(old_path.read_text())
+        self.assertEqual(old['planned_group_ids'], [99, 1])
+        self.assertEqual([g['id'] for g in old['groups']], [99])
+        self.env['FIXTURE_ALLOW_99'] = '1'
+        result = self.invoke('collect', '--groups', '99,1', '--year', '2019',
+                             '--min-words', '0', '--output', self.directory,
+                             '--resume', old_path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        current = json.loads(Path(json.loads(result.stdout)['manifest']).read_text())
+        self.assertEqual([g['id'] for g in current['groups']], [99, 1])
+
     @unittest.skipIf(sys.platform == "win32", "POSIX signal delivery")
     def test_real_process_signals_return_expected_codes(self):
         for sig in (signal.SIGINT, signal.SIGTERM):

@@ -38,6 +38,8 @@ def parser():
             command.add_argument("--min-words", type=int)
             command.add_argument("--output", dest="folder", type=Path, help="Папка корпуса (иначе из профиля)")
             command.add_argument("--report", default="-", help="JSON-итог команды; '-' — stdout")
+            command.add_argument("--resume", type=Path,
+                                 help="Паспорт прежнего запуска: проверить и переиспользовать завершённые источники")
         else:
             command.add_argument("--output", default="-", help="JSON-результат; '-' — stdout")
         if name != "search":
@@ -113,6 +115,8 @@ def inputs(args):
             raise CollectionError("Нет выбранных источников. Используйте select, GUI или --groups.")
         if not settings["folder"] or not Path(settings["folder"]).is_dir():
             raise CollectionError("Укажите существующую папку через --output или профиль.")
+        if args.resume and not args.resume.is_file():
+            raise CollectionError('Не найден паспорт --resume.')
     # Do not spend API calls if a destination directory is invalid.
     output = getattr(args, "report", getattr(args, "output", "-"))
     destinations = [destination for destination in (output, getattr(args, "save_profile", None))
@@ -123,6 +127,9 @@ def inputs(args):
     token_path = (args.token_file or Path("vk_token.txt")).resolve()
     if token_path in resolved:
         raise CollectionError("Выходной файл не должен заменять файл токена.")
+    resume_path = getattr(args, 'resume', None)
+    if resume_path and resume_path.resolve() in resolved:
+        raise CollectionError('Итог команды не должен заменять исходный паспорт --resume.')
     for destination in destinations:
         if destination is not None and str(destination) != "-":
             if not Path(destination).parent.is_dir() or Path(destination).is_dir():
@@ -163,7 +170,7 @@ def main(argv=None, client_factory=None):
             # Deliberately ignore mode=automatic: run never reselects sources.
             manifest = export_posts(settings["folder"], [r for r in rows if r.get("selected")],
                                     client, settings["year"], settings["keywords"], settings["min_words"],
-                                    lambda name: diagnostic("Сбор: " + name))
+                                    lambda name: diagnostic("Сбор: " + name), resume_manifest=args.resume)
             write_json(args.report, {"status": "complete", "manifest": str(manifest), "api_calls": client.calls})
             return 0
         if args.command == "search":

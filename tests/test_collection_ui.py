@@ -1,4 +1,5 @@
 import os
+import importlib.util
 import sys
 import tempfile
 import unittest
@@ -8,7 +9,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
-@unittest.skipUnless(os.environ.get("DISPLAY") or sys.platform == "win32", "Display required")
+@unittest.skipUnless((os.environ.get("DISPLAY") or sys.platform == "win32")
+                     and importlib.util.find_spec("customtkinter") is not None,
+                     "GUI test requires a display and CustomTkinter")
 class CollectionUITests(unittest.TestCase):
     def test_startup_profile_and_year_invalidation(self):
         import customtkinter as ctk

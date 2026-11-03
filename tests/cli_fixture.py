@@ -2,6 +2,7 @@
 
 import sys
 import threading
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -35,7 +36,7 @@ class FixtureClient:
         if gid == 98:
             self.cancel.set()
             raise Cancelled("cancel")
-        if gid == 99:
+        if gid == 99 and not os.environ.get('FIXTURE_ALLOW_99'):
             raise CollectionError("Нет доступа")
         start, _ = year_period(2019)
         posts = [{"id": i, "date": start + 86400 * (5 - i),

@@ -18,6 +18,14 @@ class Cancelled(CollectionError):
     pass
 
 
+class WallChanged(CollectionError):
+    """Internal signal: pagination must be restarted or re-anchored."""
+
+    def __init__(self, count):
+        self.count = count
+        super().__init__("Количество записей стены изменилось.")
+
+
 class VKClient:
     def __init__(self, token, cancel=None):
         if not token.strip():
@@ -88,7 +96,7 @@ def year_period(year):
 
 
 class WallPeriod:
-    """Locate a date interval in a stable descending wall; fail on detected drift.
+    """One-shot dated wall reader with bounded, anchor-verified head recovery.
 
     VK does not provide snapshot pagination. Count and page-order checks detect
     common changes, but cannot guarantee a snapshot under simultaneous edits.
@@ -100,8 +108,32 @@ class WallPeriod:
         self.client = client
         self.group_id = int(group_id)
         self.start, self.end = start, end
+        self.recovery_count = 0
+        self.first_anchor = None
+        self.last_anchor = None
+        self.consumed = False
+        self._initialize()
+
+    def _budget(self):
+        if self.client.cancel.is_set():
+            raise Cancelled("Операция отменена.")
+        if self.recovery_count >= 3:
+            raise CollectionError("Стена слишком часто меняется: исчерпаны 3 попытки восстановления.")
+        self.recovery_count += 1
+
+    def _initialize(self):
+        while True:
+            try:
+                self._locate()
+                return
+            except WallChanged:
+                self._budget()
+
+    def _locate(self):
         self.cache = {}
-        first = self._request(0, 100)
+        first = self.client.call("wall.get", owner_id=-self.group_id, offset=0,
+                                 count=100, filter="owner")
+        self.cache[(0, 100)] = first
         self.total = first["count"]
         self.pinned = [p for p in first["items"] if p.get("is_pinned")]
         if len(self.pinned) > 1 or (self.pinned and not first["items"][0].get("is_pinned")):
@@ -110,16 +142,16 @@ class WallPeriod:
         self.size = self.total - self.shift
         self.head = [p for p in first["items"] if not p.get("is_pinned")]
         self._check_order(self.head)
-        self.upper = self._boundary(end)
-        self.lower = self._boundary(start)
+        self.upper = self._boundary(self.end)
+        self.lower = self._boundary(self.start)
 
-    def _request(self, offset, count):
+    def _request(self, offset, count, fresh=False):
         key = (offset, count)
-        if key not in self.cache:
+        if fresh or key not in self.cache:
             result = self.client.call("wall.get", owner_id=-self.group_id,
                                       offset=offset, count=count, filter="owner")
             if hasattr(self, "total") and result["count"] != self.total:
-                raise CollectionError("Стена изменилась во время обработки. Повторите проверку.")
+                raise WallChanged(result["count"])
             self.cache[key] = result
         return self.cache[key]
 
@@ -160,19 +192,76 @@ class WallPeriod:
         pins = sum(self.start <= p["date"] < self.end for p in self.pinned)
         return self.lower - self.upper + pins
 
+    @staticmethod
+    def _identity(items):
+        return [(p['id'], p['date']) for p in items]
+
+    def _recover(self):
+        """Accept only a positive global offset shift confirmed at both anchors."""
+        while True:
+            self._budget()
+            head = self.client.call('wall.get', owner_id=-self.group_id, offset=0,
+                                    count=100, filter='owner')
+            delta = head['count'] - self.total
+            if delta <= 0:
+                raise CollectionError("Число записей уменьшилось или сдвиг не подтверждён; восстановление небезопасно.")
+            pins = [p for p in head['items'] if p.get('is_pinned')]
+            if self._identity(pins) != self._identity(self.pinned):
+                raise CollectionError("Закреплённые записи изменились; требуется новый запуск.")
+            self._check_order([p for p in head['items'] if not p.get('is_pinned')])
+            anchors = [self.first_anchor]
+            if self.last_anchor[0] != self.first_anchor[0]:
+                anchors.append(self.last_anchor)
+            stable = True
+            for offset, expected in anchors:
+                result = self.client.call('wall.get', owner_id=-self.group_id,
+                                          offset=offset + delta, count=len(expected), filter='owner')
+                if result['count'] != head['count']:
+                    stable = False
+                    break
+                if self._identity(result['items']) != self._identity(expected):
+                    raise CollectionError("Опорные записи не подтверждают сдвиг стены; сбор остановлен.")
+            if not stable:
+                continue
+            self.total = head['count']
+            self.cache.clear()
+            self.first_anchor = (self.first_anchor[0] + delta, self.first_anchor[1])
+            self.last_anchor = (self.last_anchor[0] + delta, self.last_anchor[1])
+            return delta
+
     def posts(self):
+        if self.consumed:
+            raise CollectionError('Для повторного обхода создайте новый WallPeriod.')
+        self.consumed = True
         seen = set()
         previous = None
-        for post in self.pinned:
-            if self.start <= post["date"] < self.end:
-                seen.add(post["id"])
-                yield post
-        for offset in range(self.upper, self.lower, 100):
-            count = min(100, self.lower - offset)
-            items = self._request(offset + self.shift, count)["items"]
+        remaining = self.lower - self.upper
+        offset = self.upper + self.shift
+        while remaining:
+            overlap = 1 if self.last_anchor else 0
+            count = min(100, remaining + overlap)
+            try:
+                items = self._request(offset - overlap, count, fresh=True)['items']
+            except WallChanged:
+                if self.first_anchor is None:
+                    self._budget()
+                    self._initialize()
+                    remaining = self.lower - self.upper
+                    offset = self.upper + self.shift
+                else:
+                    offset += self._recover()
+                continue
             if len(items) != count:
                 raise CollectionError("Получена неполная страница. Результат не считается полным.")
             self._check_order(items)
+            if overlap:
+                if self._identity(items[:1]) != self._identity(self.last_anchor[1][-1:]):
+                    raise CollectionError("Опорная запись между страницами не совпала; возможны пропуски.")
+                items = items[1:]
+            anchor = (offset, items)
+            if self.first_anchor is None:
+                self.first_anchor = anchor
+            self.last_anchor = anchor
             for post in items:
                 if post.get("is_pinned") or not self.start <= post["date"] < self.end:
                     raise CollectionError("История изменилась: запись вне найденного периода.")
@@ -183,11 +272,31 @@ class WallPeriod:
                     raise CollectionError("Повтор записи: смещения стены изменились.")
                 seen.add(post["id"])
                 yield post
-        # Fresh count check, bypassing the local cache.
-        final = self.client.call("wall.get", owner_id=-self.group_id, offset=0,
-                                 count=1, filter="owner")
-        if final["count"] != self.total:
-            raise CollectionError("Стена изменилась до завершения выгрузки.")
+            offset += len(items)
+            remaining -= len(items)
+        # Validate the endpoints again. New head publications can be reconciled,
+        # but deletions or unexplained changes must never be silently accepted.
+        while True:
+            try:
+                head = self._request(0, 1, fresh=True)
+                pins = [p for p in head['items'] if p.get('is_pinned')]
+                if self._identity(pins) != self._identity(self.pinned):
+                    raise CollectionError('Закрепление изменилось к завершению сбора.')
+                for anchor in (self.first_anchor, self.last_anchor):
+                    if anchor is not None:
+                        actual = self._request(anchor[0], len(anchor[1]), fresh=True)['items']
+                        if self._identity(actual) != self._identity(anchor[1]):
+                            raise CollectionError("Опорные записи изменились к завершению сбора.")
+                break
+            except WallChanged:
+                if self.first_anchor is None:
+                    raise CollectionError("Пустой участок стены изменился; повторите проверку.") from None
+                self._recover()
+        for post in self.pinned:
+            if self.start <= post['date'] < self.end:
+                if post['id'] in seen:
+                    raise CollectionError('Закреплённая запись повторилась в истории.')
+                yield post
 
 
 def measure(period):
@@ -243,24 +352,110 @@ def archive_posts(period, path):
             yield post
 
 
-def export_posts(folder, rows, client, year, keywords="", min_words=0, progress=None):
+def resume_exports(path, folder, rows, year, keywords, min_words):
+    """Verify completed files locally before deciding that a source can be skipped."""
+    from openpyxl import load_workbook
+    from zipfile import BadZipFile
+
+    root = Path(folder).resolve()
+    path = Path(path).resolve()
+    if path.parent != root:
+        raise CollectionError('Паспорт продолжения должен находиться в папке результатов.')
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if (data['year'] != int(year) or data['timezone'] != 'UTC' or data['filter'] != 'owner'
+                or data['keywords'] != keywords or data['min_words'] != min_words):
+            raise CollectionError('Параметры продолжения отличаются от прежнего запуска.')
+        groups = data['groups']
+        ids = [group['id'] for group in groups]
+        planned = data.get('planned_group_ids', ids)
+        if (len(ids) != len(set(ids)) or len(planned) != len(set(planned))
+                or not set(ids).issubset(set(planned)) or set(planned) != {row['id'] for row in rows}):
+            raise CollectionError('Набор источников продолжения должен совпадать с паспортом.')
+        start, end = year_period(year)
+        terms = [term.strip().casefold() for term in keywords.split(',') if term.strip()]
+        verified = {}
+        for group in groups:
+            if group['status'] != 'complete':
+                continue
+            raw_path, excel_path = [(root / group[key]).resolve() for key in ('raw_file', 'file')]
+            if any(p.parent != root or not p.is_file() for p in (raw_path, excel_path)):
+                raise CollectionError('Не найдены безопасные пути к завершённым файлам.')
+            count = 0
+            ids = set()
+            retained = {}
+            with raw_path.open(encoding='utf-8') as stream:
+                for line in stream:
+                    post = json.loads(line)
+                    pid = post['post_id']
+                    if (post['group_id'] != group['id'] or pid in ids
+                            or not start <= post['date'] < end):
+                        raise CollectionError('Завершённый JSONL не прошёл проверку ID/дат.')
+                    ids.add(pid)
+                    count += 1
+                    text = post['text']
+                    if text.strip() and len(text.split()) >= min_words and (not terms or any(t in text.casefold() for t in terms)):
+                        retained[pid] = post
+            book = load_workbook(excel_path, read_only=True)
+            try:
+                cells = book.active.iter_rows(values_only=True)
+                if next(cells, None) != ('text', 'post_id', 'group_id', 'date_utc', 'url'):
+                    raise CollectionError('Заголовок завершённого Excel не прошёл проверку.')
+                excel_ids = set()
+                for text, pid, gid, date, url in cells:
+                    if pid not in retained or pid in excel_ids:
+                        raise CollectionError('Набор строк завершённого Excel не совпадает с JSONL.')
+                    post = retained[pid]
+                    clean = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', post['text'])[:32767]
+                    if (text != clean or gid != group['id']
+                            or date != datetime.fromtimestamp(post['date'], timezone.utc).isoformat()
+                            or url != f"https://vk.com/wall-{gid}_{pid}"):
+                        raise CollectionError('Содержимое завершённого Excel отличается от JSONL.')
+                    excel_ids.add(pid)
+                if (count != group['available'] or len(excel_ids) != group['retained']
+                        or excel_ids != set(retained)):
+                    raise CollectionError('Количество строк завершённых файлов не совпадает с паспортом.')
+            finally:
+                book.close()
+            verified[group['id']] = dict(group, reused=True, reused_from=path.name)
+        return verified
+    except CollectionError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, BadZipFile):
+        raise CollectionError('Невозможно проверить паспорт/файлы продолжения.') from None
+
+
+def export_posts(folder, rows, client, year, keywords="", min_words=0, progress=None, resume_manifest=None):
     from openpyxl import Workbook
 
     start, end = year_period(year)
     directory = Path(folder)
     if not directory.is_dir():
         raise CollectionError("Выберите существующую папку.")
+    reused = resume_exports(resume_manifest, folder, rows, year, keywords, min_words) if resume_manifest else {}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     manifest = {"started_utc": stamp, "year": int(year), "timezone": "UTC",
                 "filter": "owner", "keywords": keywords, "min_words": min_words,
-                "groups": [], "status": "running"}
+                "groups": [], "planned_group_ids": [row['id'] for row in rows], "status": "running"}
+    if resume_manifest:
+        manifest['resumed_from'] = Path(resume_manifest).name
     manifest_path = directory / f"collection_{stamp}.json"
     terms = [x.strip().casefold() for x in keywords.split(",") if x.strip()]
+    active_result = None
+    book = sheet = None
     try:
         for group in rows:
+            if client.cancel.is_set():
+                raise Cancelled('Операция отменена.')
+            if group['id'] in reused:
+                manifest['groups'].append(reused[group['id']])
+                if progress:
+                    progress('Проверенные файлы переиспользованы: ' + group['name'])
+                continue
             if progress:
                 progress(group["name"])
             result = {"id": group["id"], "name": group["name"], "status": "running"}
+            active_result = result
             manifest["groups"].append(result)
             raw_path = directory / f"VK_{group['id']}_{year}_{stamp}.jsonl"
             result["raw_file"] = raw_path.name
@@ -288,15 +483,19 @@ def export_posts(folder, rows, client, year, keywords="", min_words=0, progress=
                 kept += 1
             path = directory / f"VK_{group['id']}_{year}_посты_{stamp}.xlsx"
             book.save(path)
-            result.update(status="complete", available=collected, retained=kept, file=path.name)
+            result.update(status="complete", available=collected, retained=kept, file=path.name,
+                          recovery_count=period.recovery_count,
+                          pagination='anchored; first page fixes the upper boundary')
+            active_result = None
+            book = sheet = None
         manifest["status"] = "complete"
     except BaseException as error:
-        if "sheet" in locals():
+        if sheet is not None:
             sheet.close()
             book.close()
         manifest["status"] = "cancelled" if client.cancel.is_set() or isinstance(error, KeyboardInterrupt) else "failed"
-        if manifest["groups"]:
-            manifest["groups"][-1]["status"] = manifest["status"]
+        if active_result is not None:
+            active_result['status'] = manifest['status']
         raise
     finally:
         manifest["api_calls"] = client.calls

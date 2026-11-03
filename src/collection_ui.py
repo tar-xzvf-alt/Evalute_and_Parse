@@ -93,10 +93,11 @@ class CollectionPanel(ctk.CTkFrame):
         self.button(actions, "Снять отметки", lambda: self.mark(False), row=0, column=1)
         self.button(actions, "Открыть VK", self.open_group, row=0, column=2)
         self.button(actions, "Собрать выбранные", self.collect, primary=True, row=0, column=3)
-        self.stop = ctk.CTkButton(actions, text="Остановить", height=36,
+        self.button(actions, "Продолжить…", self.resume, row=0, column=4)
+        self.stop = ctk.CTkButton(actions, text="Остановить", height=36, width=110,
                                    command=self.cancel.set, state="disabled")
         secondary(self.stop)
-        self.stop.grid(row=0, column=4, padx=4)
+        self.stop.grid(row=0, column=5, padx=4)
         self.progress = ctk.CTkProgressBar(self, mode="indeterminate")
         self.progress.grid(row=4, column=0, sticky="ew")
         self.progress.set(0)
@@ -272,7 +273,13 @@ class CollectionPanel(ctk.CTkFrame):
             return
         self.begin(lambda client, settings: self.assess(client, settings, rows, automatic=True))
 
-    def collect(self):
+    def resume(self):
+        path = filedialog.askopenfilename(title="Паспорт прежнего сбора collection_*.json",
+                                          filetypes=[("Паспорт сбора", "collection_*.json")])
+        if path:
+            self.collect(resume_manifest=path)
+
+    def collect(self, resume_manifest=None):
         import copy
         rows = copy.deepcopy([r for r in self.rows if r.get("selected")])
         if not rows:
@@ -281,7 +288,8 @@ class CollectionPanel(ctk.CTkFrame):
         def run(client, settings):
             path = export_posts(settings["folder"], rows, client, settings["year"],
                                 settings["keywords"], settings["min_words"],
-                                lambda name: self.messages.put(("status", "Сбор: " + name)))
+                                lambda name: self.messages.put(("status", "Сбор: " + name)),
+                                resume_manifest=resume_manifest)
             self.messages.put(("status", "Готово. Паспорт: " + str(path)))
         self.begin(run)
 

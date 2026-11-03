@@ -67,12 +67,13 @@ class WallTests(unittest.TestCase):
             self.assertEqual(period.estimate(), len(expected))
             self.assertEqual({p["id"] for p in period.posts()}, expected)
 
-    def test_detects_changed_count(self):
+    def test_change_before_first_output_relocates_safely(self):
         client = FakeClient([post(i, 1000-i) for i in range(1000)])
         period = WallPeriod(client, 1, 10, 20)
         client.items.append(post(1001, 0))
-        with self.assertRaises(CollectionError):
-            list(period.posts())
+        # Nothing has been emitted yet: a fresh bounded search is safe.
+        self.assertEqual({p['id'] for p in period.posts()}, set(range(981, 991)))
+        self.assertEqual(period.recovery_count, 1)
 
     def test_cancel_before_network(self):
         event = threading.Event()

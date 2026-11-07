@@ -52,6 +52,20 @@ class PublicationModelTests(unittest.TestCase):
             PublicationModel(BertModel(BertConfig(hidden_size=16, num_hidden_layers=1,
                                                  num_attention_heads=2, intermediate_size=32)), 'C')
 
+    def test_topic_positive_weights_change_only_positive_bce_terms(self):
+        import math
+        import torch
+        from transformers import BertConfig, BertModel
+        from src.rubert_model import PublicationModel
+        model = PublicationModel(BertModel(BertConfig(hidden_size=16, num_hidden_layers=1,
+                                                      num_attention_heads=2, intermediate_size=32)), 'B')
+        logits = {'assessment': torch.zeros(1, 4), 'topics': torch.zeros(1, 8)}
+        target = torch.tensor([[1., 0., 0., 0., 0., 0., 0., 0.]])
+        inclusion, assessment = torch.tensor([1]), torch.tensor([0])
+        ordinary = model.loss(logits, inclusion, assessment, target)
+        weighted = model.loss(logits, inclusion, assessment, target, topic_pos_weight=torch.tensor([3., 9., 9., 9., 9., 9., 9., 9.]))
+        self.assertAlmostEqual(float(weighted - ordinary), 2 * math.log(2) / 8, places=6)
+
     def test_tiny_gpu_training_loop_without_network_or_real_data(self):
         import json
         import torch

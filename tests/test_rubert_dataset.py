@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.rubert_dataset import group_texts, shingles, split_groups
-from src.rubert_training import load_dataset
+from src.rubert_training import load_dataset, training_topic_weights
 
 
 class DuplicateTests(unittest.TestCase):
@@ -77,6 +77,16 @@ class DuplicateTests(unittest.TestCase):
             (folder / 'train.jsonl').write_text('{}\n')
             with self.assertRaisesRegex(ValueError, 'changed'):
                 load_dataset(folder, 'A')
+
+    def test_positive_weights_are_training_only_and_match_class_counts(self):
+        rows = [{'split': 'train', 'include': True, 'topics': [2 * i + 1, 2 * i + 2]} for i in range(4)]
+        positive, weights = training_topic_weights(rows)
+        self.assertEqual(positive, [1] * 8)
+        self.assertEqual(weights, [3.] * 8)
+        with self.assertRaises(ValueError):
+            training_topic_weights([{**rows[0], 'split': 'validation'}] + rows[1:])
+        with self.assertRaises(ValueError):
+            training_topic_weights(rows[:3])
 
 
 if __name__ == '__main__':

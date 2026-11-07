@@ -12,6 +12,15 @@ from pathlib import Path
 from src.rubert_dataset import ASSESSMENTS, read_jsonl, write_json
 
 
+def training_topic_weights(rows):
+    if not rows or any(r.get('split') != 'train' or r.get('include') is not True for r in rows):
+        raise ValueError('positive weights require included training rows only')
+    positive = [sum(topic in row['topics'] for row in rows) for topic in range(1, 9)]
+    if any(not 0 < n < len(rows) for n in positive):
+        raise ValueError('each topic needs positive and negative training examples')
+    return positive, [(len(rows) - n) / n for n in positive]
+
+
 def load_dataset(path, task):
     path = Path(path)
     manifest = json.loads((path / 'manifest.json').read_text(encoding='utf-8'))
@@ -116,6 +125,15 @@ def run(args):
     device = torch.device('cuda')
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=.01, foreach=False)
     train = splits['train']; encoded = encode_rows(tokenizer, train, args.max_length)
+    topic_pos_weight = None
+    if getattr(args, 'balance_topics', False):
+        if args.task != 'B':
+            raise ValueError('topic balancing requires task B')
+        positive, weights = training_topic_weights(train)
+        topic_pos_weight = torch.tensor(weights, dtype=torch.float32, device=device)
+        config['topic_balancing'] = {'method': 'train-only negative/positive support',
+                                     'train_positive_counts': positive, 'pos_weight': weights}
+        write_json(output / 'run_config.json', config)
     loaded_seconds = time.perf_counter() - started
     # Length statistics include input texts only, not test outcomes or tuning.
     lengths = tokenizer([r['source_region'] for r in train], [r['text'] for r in train], truncation=False, padding=False, verbose=False)['input_ids']
@@ -132,7 +150,7 @@ def run(args):
         for indices in batches:
             inputs, targets = pack(tokenizer, encoded, train, indices, device, args.max_length, fixed)
             logits = model(**inputs)
-            loss = model.loss(logits, *targets)
+            loss = model.loss(logits, *targets, topic_pos_weight=topic_pos_weight)
             if not torch.isfinite(loss):
                 raise RuntimeError('nonfinite loss')
             (loss * len(indices) / count).backward()
@@ -232,9 +250,12 @@ def main():
     parser.add_argument('--updates', type=int, default=3)
     parser.add_argument('--learning-rate', type=float, default=2e-5)
     parser.add_argument('--seed', type=int, default=20261107)
+    parser.add_argument('--balance-topics', action='store_true', help='B only: train-derived positive weights in topic BCE; does not read validation/test targets for weights')
     args = parser.parse_args()
     if min(args.batch_size, args.accumulation, args.epochs, args.updates) < 1 or not math.isfinite(args.learning_rate) or args.learning_rate <= 0:
         parser.error('sizes/epochs/updates/learning-rate must be positive and finite')
+    if args.balance_topics and args.task != 'B':
+        parser.error('--balance-topics requires --task B')
     run(args)
 
 

@@ -59,6 +59,21 @@ class SupervisorTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 supervise(args)
 
+    def test_explicit_b_only_balanced_run_does_not_repeat_a(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.fixture(directory); args.tasks = ['B']; args.balance_topics = True
+            def spawn(command, **kwargs):
+                self.assertEqual(command[command.index('--task') + 1], 'B')
+                self.assertIn('--balance-topics', command)
+                output = Path(command[command.index('--output') + 1])
+                def finish():
+                    output.mkdir(); (output / 'completed.json').write_text('{}')
+                    return 0
+                return Mock(pid=123, wait=Mock(side_effect=finish))
+            with patch('scripts.train_rubert_pair.subprocess.Popen', side_effect=spawn) as calls:
+                self.assertEqual(supervise(args), 0)
+                self.assertEqual(calls.call_count, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

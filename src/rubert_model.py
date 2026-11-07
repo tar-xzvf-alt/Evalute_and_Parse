@@ -33,11 +33,11 @@ class PublicationModel(torch.nn.Module):
             return {'inclusion': self.inclusion(pooled)}
         return {'assessment': self.assessment(pooled), 'topics': self.topics(pooled)}
 
-    def loss(self, logits, inclusion, assessment, topics):
+    def loss(self, logits, inclusion, assessment, topics, topic_pos_weight=None):
         if self.task == 'A':
             return torch.nn.functional.cross_entropy(logits['inclusion'], inclusion)
         return (torch.nn.functional.cross_entropy(logits['assessment'], assessment)
-                + torch.nn.functional.binary_cross_entropy_with_logits(logits['topics'], topics))
+                + torch.nn.functional.binary_cross_entropy_with_logits(logits['topics'], topics, pos_weight=topic_pos_weight))
 
     def save(self, path, tokenizer, metadata):
         path = Path(path)

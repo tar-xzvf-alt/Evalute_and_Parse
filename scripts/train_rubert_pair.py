@@ -6,6 +6,7 @@ All child output and atomic status remain on the training PC, not in SSH memory.
 import argparse
 import ctypes
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -41,7 +42,11 @@ def supervise(args):
     runtime = Path(args.runtime_root).resolve()
     destination = Path(args.run_dir).resolve()
     python = runtime / '.venv-rubert/Scripts/python.exe'
-    if not python.is_file() or not (project / 'dataset/manifest.json').is_file():
+    dataset = Path(args.dataset).resolve() if getattr(args, 'dataset', None) else project / 'dataset'
+    tasks = list(getattr(args, 'tasks', ['A', 'B']))
+    if not tasks or len(set(tasks)) != len(tasks) or any(task not in ('A', 'B') for task in tasks):
+        raise ValueError('invalid explicit task sequence')
+    if not python.is_file() or not (dataset / 'manifest.json').is_file():
         raise ValueError('environment or frozen dataset is missing')
     if not (runtime / '.parsevk-training-root').is_file():
         raise ValueError('runtime is not a managed training root')
@@ -51,7 +56,12 @@ def supervise(args):
     status = {'status': 'running', 'started_utc': now(), 'supervisor_pid': os.getpid(),
               'source_commit': args.source_commit, 'max_length': 512,
               'epochs_each': 3, 'batch_size': 2, 'accumulation': 8,
-              'seed': 20261107, 'network_disabled': True, 'tasks': []}
+              'seed': 20261107, 'network_disabled': True, 'tasks': [],
+              'task_sequence': tasks, 'balance_topics': bool(getattr(args, 'balance_topics', False)),
+              'dataset_path': str(dataset),
+              'training_source_sha256': {name: hashlib.sha256((project / name).read_bytes()).hexdigest()
+                                         for name in ['src/rubert_model.py', 'src/rubert_training.py']
+                                         if (project / name).is_file()}}
 
     def save():
         tmp = destination / 'status.tmp'
@@ -65,12 +75,14 @@ def supervise(args):
                         'HF_HUB_DISABLE_SYMLINKS_WARNING': '1'})
     save()
     try:
-        for task in ('A', 'B'):
+        for task in tasks:
             command = [str(python), '-u', '-m', 'src.rubert_training', 'train',
-                       '--dataset', str(project / 'dataset'), '--task', task,
+                       '--dataset', str(dataset), '--task', task,
                        '--output', str(destination / ('model_' + task)),
                        '--epochs', '3', '--max-length', '512', '--batch-size', '2',
                        '--accumulation', '8', '--seed', '20261107']
+            if getattr(args, 'balance_topics', False) and task == 'B':
+                command.append('--balance-topics')
             record = {'task': task, 'started_utc': now(), 'status': 'starting', 'command': command}
             status['tasks'].append(record); save()
             with (destination / (task + '_stdout.log')).open('wb') as out, \
@@ -101,6 +113,9 @@ def main():
     parser.add_argument('--run-dir', required=True)
     parser.add_argument('--source-commit', required=True)
     parser.add_argument('--event-name')
+    parser.add_argument('--dataset', help='Optional immutable dataset directory, default project/dataset')
+    parser.add_argument('--tasks', choices=['A', 'B'], nargs='+', default=['A', 'B'])
+    parser.add_argument('--balance-topics', action='store_true')
     args = parser.parse_args()
     try:
         return supervise(args)

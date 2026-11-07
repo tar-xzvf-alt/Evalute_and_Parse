@@ -13,6 +13,8 @@
 
 # Secrets
 vk_token.txt
+vk_token.txt.meta.json
+.parsevk-auth-*
 
 # Generated output / logs
 *.log

@@ -1,12 +1,15 @@
-"""Non-interactive collection commands. stdout is JSON; stderr is diagnostics."""
+"""Headless collection and browser-assisted login. stdout is JSON; diagnostics on stderr."""
 
 import argparse
+import getpass
 import json
 import os
 import signal
 import sys
 import tempfile
 import threading
+import warnings
+import webbrowser
 from pathlib import Path
 
 from collection_workflow import assess_groups, normalize_settings, search_groups
@@ -16,6 +19,11 @@ from vk_collection import Cancelled, CollectionError, VKClient, export_posts, lo
 def parser():
     root = argparse.ArgumentParser(prog="parsevk", description="Сбор VK без GUI. Все периоды — UTC.")
     commands = root.add_subparsers(dest="command", required=True)
+    auth = commands.add_parser("auth", help="Получить пользовательский VK-токен через браузер")
+    auth_commands = auth.add_subparsers(dest="auth_command", required=True)
+    login = auth_commands.add_parser("login", help="Открыть VK, принять итоговый URL скрытым вводом и сохранить токен")
+    login.add_argument("--token-file", type=Path, default=Path("vk_token.txt"), help="Куда сохранить токен (по умолчанию ./vk_token.txt)")
+    login.add_argument("--no-browser", action="store_true", help="Только показать адрес авторизации, не открывать браузер")
     for name, description in (
             ("search", "Найти сообщества"), ("assess", "Оценить годовую активность"),
             ("verify", "Пересчитать год и месяцы"), ("select", "Выбрать источники по активности"),
@@ -137,8 +145,51 @@ def inputs(args):
     return settings, rows
 
 
+def auth_login(args):
+    from vk_auth import authorization_url, parse_redirect, save_login
+
+    # getpass falls back to echoed stdin without a terminal; forbid that path.
+    if not sys.stdin.isatty():
+        print("Авторизацию запускайте в своём интерактивном терминале. URL с токеном не передавайте аргументом, через pipe или в чат.", file=sys.stderr)
+        return 2
+    url = authorization_url()
+    print("Войдите в VK и разрешите доступ. Затем скопируйте полный URL итоговой страницы из адресной строки.", file=sys.stderr)
+    print("Адрес авторизации: " + url, file=sys.stderr)
+    if not args.no_browser:
+        try:
+            opened = webbrowser.open(url)
+        except (OSError, webbrowser.Error):
+            opened = False
+        if not opened:
+            print("Браузер не открылся. Откройте указанный адрес вручную.", file=sys.stderr)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            value = getpass.getpass("Итоговый URL (ввод скрыт): ")
+        token, metadata = parse_redirect(value)
+        destination, sidecar = save_login(args.token_file, token, metadata)
+        write_json("-", {"status": "saved", "token_file": str(destination),
+                         "metadata_file": str(sidecar), **metadata,
+                         "api_validated": False})
+        return 0
+    except (KeyboardInterrupt, EOFError):
+        print("Авторизация отменена; существующий токен не изменён.", file=sys.stderr)
+        return 130
+    except getpass.GetPassWarning:
+        print("Скрытый ввод недоступен. Запустите команду в обычном терминале; секрет не вводился.", file=sys.stderr)
+        return 2
+    except CollectionError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except OSError:
+        print("Не удалось завершить локальное сохранение авторизации.", file=sys.stderr)
+        return 1
+
+
 def main(argv=None, client_factory=None):
     args = parser().parse_args(argv)
+    if args.command == "auth":
+        return auth_login(args)
     token = ""
     client = None
     cancel = threading.Event()

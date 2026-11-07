@@ -684,8 +684,9 @@ def validate_token():
 
 # Получение токена
 def open_link():
-    import webbrowser                                         
-    webbrowser.open("https://oauth.vk.com/authorize?client_id=54447901&display=page&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.131")
+    import webbrowser
+    from vk_auth import authorization_url
+    webbrowser.open(authorization_url())
 
 
 label_token = ctk.CTkLabel(tab_token, text="Токен VK API", font=(font_family, 20, "bold"))
